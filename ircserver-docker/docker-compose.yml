@@ -1,0 +1,8 @@
+services:
+  irc:
+    build: .
+    container_name: irc-server
+    ports:
+      - "0.0.0.0:6667:6667"  # Allow connections from external IPs
+    restart: unless-stopped
+
