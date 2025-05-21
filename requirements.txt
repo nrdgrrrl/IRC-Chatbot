@@ -1,0 +1,4 @@
+irc
+httpx
+python-dotenv
+
