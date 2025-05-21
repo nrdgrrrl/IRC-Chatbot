@@ -24,8 +24,8 @@ A Python-based IRC chatbot that uses Ollama for generating responses. The bot ca
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/irc_chatbot.git
-cd irc_chatbot
+git clone https://github.com/nrdgrrrl/IRC-Chatbot.git
+cd IRC-Chatbot
 ```
 
 2. Install dependencies:
