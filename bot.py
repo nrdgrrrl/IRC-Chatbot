@@ -138,10 +138,20 @@ def is_looping(text):
     return False
 
 def clean_reply(reply):
+    # Remove any leading/trailing whitespace
     reply = reply.strip()
+    
+    # Remove bot name prefix if it exists (case insensitive)
     reply = re.sub(rf"^{BOT_NAME}[:,]?\s*", "", reply, flags=re.IGNORECASE)
+    
+    # Split into sentences and limit to 1-3 sentences
     sentences = re.split(r'(?<=[.!?]) +', reply)
-    return ' '.join(sentences[:random.choice([1, 2, 3])]).strip()
+    reply = ' '.join(sentences[:random.choice([1, 2, 3])]).strip()
+    
+    # Remove any remaining bot name mentions
+    reply = re.sub(rf"{BOT_NAME}[:,]?\s*", "", reply, flags=re.IGNORECASE)
+    
+    return reply
 
 def summarize_history(lines):
     summary = []
@@ -309,7 +319,7 @@ def on_pubmsg(connection, event):
             safe = safe[:400] + "..."
 
         log_message(BOT_NAME, safe)
-        connection.privmsg(CHANNEL, f"{BOT_NAME}: {safe}")
+        connection.privmsg(CHANNEL, safe)  # Removed the bot name prefix here
 
     threading.Thread(target=respond).start()
 
