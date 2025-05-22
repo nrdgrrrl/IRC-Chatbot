@@ -101,6 +101,8 @@ recent_messages = set()
 last_activity_time = datetime.datetime.now(datetime.UTC)
 last_replies = []
 last_message_time = None
+conversation_revival_thread = None
+conversation_revival_running = False
 
 def log_message(nick, msg):
     if not ENABLE_LOGGING:
@@ -146,6 +148,20 @@ def clean_reply(reply):
     
     # Remove any remaining bot name mentions
     reply = re.sub(rf"{BOT_NAME}[:,]?\s*", "", reply, flags=re.IGNORECASE)
+    
+    # Remove rule-like text
+    rule_patterns = [
+        r"Rules?:.*?(?=\n\n|\Z)",
+        r"Instructions?:.*?(?=\n\n|\Z)",
+        r"Guidelines?:.*?(?=\n\n|\Z)",
+        r"RULES?:.*?(?=\n\n|\Z)",
+        r"INSTRUCTIONS?:.*?(?=\n\n|\Z)",
+        r"GUIDELINES?:.*?(?=\n\n|\Z)",
+        r"Response:.*?(?=\n\n|\Z)",
+        r"RESPONSE:.*?(?=\n\n|\Z)"
+    ]
+    for pattern in rule_patterns:
+        reply = re.sub(pattern, "", reply, flags=re.IGNORECASE | re.DOTALL)
     
     # Split into sentences, but preserve emojis and special characters
     sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', reply)
@@ -217,6 +233,88 @@ def generate_reply(prompt, system_override=None, max_retries=3, base_delay=3):
         "🤖 Beep boop. No thoughts. Head empty."
     ])
 
+def should_revive_conversation():
+    """Check if enough time has passed to revive the conversation"""
+    now = datetime.datetime.now(datetime.UTC)
+    time_since_last_activity = (now - last_activity_time).total_seconds()
+    # Base 3 minutes + random 2 minutes
+    revival_threshold = 180 + random.uniform(0, 120)
+    return time_since_last_activity > revival_threshold
+
+def find_interesting_message():
+    """Find an interesting message from history to respond to"""
+    if not conversation_history:
+        return None
+    
+    # Filter out bot messages and very short messages
+    human_messages = [
+        msg for msg in conversation_history 
+        if not msg.startswith("Bot") and len(msg.split()) > 3
+    ]
+    
+    if not human_messages:
+        return None
+    
+    # Pick a random message from the last 10 messages
+    recent_messages = human_messages[-10:]
+    return random.choice(recent_messages)
+
+def conversation_revival_loop(connection):
+    """Background thread that monitors conversation activity and triggers responses"""
+    global conversation_revival_running
+    conversation_revival_running = True
+    
+    while conversation_revival_running:
+        try:
+            if should_revive_conversation():
+                print(f"[{BOT_NAME}] Conversation has been quiet, attempting to revive...")
+                
+                # Find an interesting message to respond to
+                message = find_interesting_message()
+                if message:
+                    # Add the message to conversation history if it's not already there
+                    if message not in conversation_history:
+                        conversation_history.append(message)
+                    
+                    # Generate a response
+                    prompts = load_prompts()
+                    if prompts:
+                        system_override = prompts.get("system_instructions", "").strip()
+                        summary = summarize_history(conversation_history)
+                        raw_history = "\n".join(conversation_history[-CONVERSATION_HISTORY_LENGTH:])
+                        
+                        # Use a slightly modified prompt for revival
+                        prompt_template = prompts.get("regular_prompt", "")
+                        prompt = prompt_template.format(
+                            bot_name=BOT_NAME,
+                            personality=PERSONALITY,
+                            summary=summary,
+                            history=raw_history
+                        ).strip()
+                        
+                        # Add a hint that we're reviving the conversation
+                        prompt += "\n\nNote: The conversation has been quiet. Respond naturally to the last message, helping to revive the discussion."
+                        
+                        reply = generate_reply(prompt, system_override=system_override)
+                        if reply:
+                            safe = reply.replace("\r", " ").replace("\n", " ").strip()
+                            if len(safe) > 400:
+                                safe = safe[:400] + "..."
+                            
+                            log_message(BOT_NAME, safe)
+                            connection.privmsg(CHANNEL, safe)
+                            
+                            # Update last activity time
+                            global last_activity_time
+                            last_activity_time = datetime.datetime.now(datetime.UTC)
+            
+            # Check every 30 seconds
+            time.sleep(30)
+            
+        except Exception as e:
+            print(f"[{BOT_NAME}] Error in conversation revival loop: {e}")
+            time.sleep(30)  # Wait before retrying
+
 def on_connect(connection, event):
     print(f"[{BOT_NAME}] Connected.")
     # Send USER command explicitly
@@ -225,10 +323,24 @@ def on_connect(connection, event):
     time.sleep(1)
     connection.join(CHANNEL)
     log_message("System", f"{BOT_NAME} has joined {CHANNEL}")
+    
+    # Start the conversation revival thread
+    global conversation_revival_thread
+    if conversation_revival_thread is None or not conversation_revival_thread.is_alive():
+        conversation_revival_thread = threading.Thread(
+            target=conversation_revival_loop,
+            args=(connection,),
+            daemon=True
+        )
+        conversation_revival_thread.start()
 
 def on_disconnect(connection, event):
     print(f"[{BOT_NAME}] Disconnected. Event: {event}")
     log_message("System", f"{BOT_NAME} has disconnected")
+    
+    # Stop the conversation revival thread
+    global conversation_revival_running
+    conversation_revival_running = False
     
     # Check if we should stop trying to reconnect
     if "Too many connections" in str(event) or "Connection limit exceeded" in str(event):
