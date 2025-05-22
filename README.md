@@ -1,26 +1,58 @@
 # IRC Chatbot
 
-A Python-based IRC chatbot that uses Ollama for generating responses. The bot can be configured with different personalities and behaviors, and multiple instances can interact with each other in an IRC channel.
+A modular IRC chatbot that uses Ollama for AI-powered responses. The bot can be configured to use different models and respond to various commands.
 
 ## Features
 
-- Connects to IRC servers and joins specified channels
-- Uses Ollama for AI-powered responses
-- Configurable personality and behavior
-- Multiple response styles and tones
-- Conversation history tracking
-- Logging support
-- Environment variable configuration
-- Anti-repetition and anti-looping mechanisms
-- Command-line configuration for running multiple bots
-- Includes Docker setup for local IRC server
-- Includes Docker setup for Ollama API server
+- Modular command system
+- AI-powered responses using Ollama
+- Configurable through JSON
+- Multiple model support
+- Docker support for both IRC server and Ollama
 
-## Requirements
+## Prerequisites
 
-- Python 3.6+
-- IRC server (included Docker setup available)
-- Ollama server (included Docker setup available)
+- Python 3.8 or higher
+- Docker and Docker Compose Plugin (for IRC server and Ollama)
+- Git
+- (Optional) IRC client for watching the bots interact
+
+## Development Setup
+
+### Setting up a Python Virtual Environment
+
+It's recommended to use a Python virtual environment to manage dependencies. Here's how to set it up:
+
+1. Create a virtual environment:
+```bash
+# Using venv (built into Python)
+python -m venv venv
+
+# Or using virtualenv
+pip install virtualenv
+virtualenv venv
+```
+
+2. Activate the virtual environment:
+```bash
+# On Linux/macOS
+source venv/bin/activate
+
+# On Windows
+.\venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+4. When you're done working, you can deactivate the virtual environment:
+```bash
+deactivate
+```
+
+Note: Always activate the virtual environment before running the bot or installing new dependencies.
 
 ## Installation
 
@@ -35,201 +67,122 @@ cd IRC-Chatbot
 pip install -r requirements.txt
 ```
 
-3. (Optional) Set up a local IRC server using Docker:
+3. Set up the IRC server (optional, if you don't have an IRC server):
 ```bash
 cd ircserver-docker
-docker-compose up -d
+docker compose up -d
 ```
-See [IRC Server Setup](ircserver-docker/README.md) for more details.
 
-4. (Optional) Set up Ollama API server using Docker:
+4. Set up Ollama (optional, if you don't have Ollama running):
 ```bash
 cd ollama-docker
-docker-compose up -d
+docker compose up -d
 docker exec -it ollama-server ollama pull tinyllama
 ```
-See [Ollama Setup](ollama-docker/README.md) for more details.
-
-5. Configure the bot by editing `config.json` or setting environment variables.
 
 ## Configuration
 
-The bot uses a three-layer configuration system, where each layer can override the previous:
-
-1. Default values in `config.json` (base configuration)
-2. Environment variables (optional overrides)
-3. Command-line arguments (highest priority)
-
-### Configuration Hierarchy
-
-```mermaid
-graph TD
-    A[config.json] -->|Default Values| B[Environment Variables]
-    B -->|Optional Overrides| C[Command Line Arguments]
-    C -->|Highest Priority| D[Final Configuration]
+1. Copy the example configuration:
+```bash
+cp config.example.json config.json
 ```
 
-### 1. Base Configuration (`config.json`)
-
-This file contains the default configuration that will be used if no overrides are specified. It's useful for:
-- Setting up default bot behavior
-- Defining common settings for all bots
-- Maintaining consistent configuration across different environments
-
+2. Edit `config.json` with your settings:
 ```json
 {
     "irc": {
-        "server": "irc.example.com",
+        "server": "localhost",
         "port": 6667,
-        "channel": "#bots"
+        "channels": ["#general"]
     },
     "bot": {
-        "personality": "a friendly and helpful AI assistant",
-        "model": "tinyllama",
-        "always_respond_to": "Victoria"
+        "name": "your_bot_name",
+        "personality": "a friendly and helpful AI assistant"
     },
     "ollama": {
-        "url": "http://localhost:11434/api/generate"
-    },
-    "behavior": {
-        "off_topic_chance": 0.12,
-        "tone_chance": 0.25,
-        "post_delay_seconds": 20,
-        "post_delay_jitter": 10,
-        "max_concurrent_requests": 1,
-        "conversation_history_length": 6
-    },
-    "logging": {
-        "enabled": true,
-        "log_dir": "logs"
-    },
-    "files": {
-        "prompt_file": "prompts.json"
+        "url": "http://localhost:11434/api/generate",
+        "model": "tinyllama",
+        "temperature": 0.7,
+        "max_tokens": 100
     }
 }
 ```
 
-Note: The bot name is not included in the base configuration as it should be specified either through environment variables or command-line arguments when running each bot instance.
+## Usage
 
-### 2. Environment Variables
-
-Environment variables can override the default values from `config.json`. This is useful for:
-- Setting different configurations in different environments
-- Keeping sensitive information out of the config file
-- Quick configuration changes without modifying files
-
+1. Start the bot:
 ```bash
-# IRC Configuration
-IRC_SERVER=irc.example.com
-IRC_PORT=6667
-IRC_CHANNEL=#bots
+# Basic usage
+python bot.py
 
-# Bot Configuration
-BOT_NAME=BotA
-BOT_PERSONALITY="a quirky AI who loves puns and hates Mondays"
-BOT_MODEL=tinyllama
-BOT_ALWAYS_RESPOND_TO=Victoria
-
-# Ollama Configuration
-OLLAMA_URL=http://localhost:11434/api/generate
-```
-
-### 3. Command-line Arguments
-
-Command-line arguments have the highest priority and can override both the config file and environment variables. This is useful for:
-- Running multiple bots with different personalities
-- Testing different configurations
-- Temporary changes
-
-```bash
+# Or with custom personality
 python bot.py --bot-name BotB --personality "a sarcastic AI who loves dad jokes"
 ```
 
-Available command-line arguments:
-- `--bot-name`: Name of the bot
-- `--personality`: Bot personality description
-- `--model`: Ollama model to use
-- `--irc-server`: IRC server address
-- `--irc-port`: IRC server port
-- `--irc-channel`: IRC channel to join
-- `--ollama-url`: Ollama API URL
+2. The bot will connect to the IRC server and join the configured channels.
 
-### When to Use Each Method
+3. Available commands:
+   - `!help` - Show available commands
+   - `!ask <question>` - Ask the AI a question
+   - `!model <name>` - Switch to a different model
+   - `!temperature <value>` - Adjust response temperature
+   - `!max_tokens <value>` - Adjust maximum response length
 
-1. **Use `config.json` for:**
-   - Default settings that apply to all bots
-   - Settings that rarely change
-   - Configuration that should be version controlled
+### Watching the Bots Interact
 
-2. **Use Environment Variables for:**
-   - Environment-specific settings
-   - Sensitive information
-   - Settings that change between deployments
+You can watch the bots interact by connecting to the IRC server using any IRC client. Here are some popular options:
 
-3. **Use Command-line Arguments for:**
-   - Running multiple bots with different personalities
-   - Testing different configurations
-   - Temporary changes
+1. **HexChat** (Cross-platform):
+   - Download from [hexchat.net](https://hexchat.net/)
+   - Connect to server: `localhost`
+   - Port: `6667`
+   - Join channel: `#general`
 
-### Example: Running Multiple Bots with Different Configurations
+2. **mIRC** (Windows):
+   - Download from [mirc.com](https://www.mirc.com/)
+   - Connect to server: `localhost`
+   - Port: `6667`
+   - Join channel: `#general`
 
-1. **Basic Bot** (uses `config.json` defaults):
-```bash
-python bot.py
-```
+3. **Textual** (macOS):
+   - Download from [textual.app](https://www.codeux.com/textual/)
+   - Connect to server: `localhost`
+   - Port: `6667`
+   - Join channel: `#general`
 
-2. **Custom Bot** (overrides with command-line arguments):
-```bash
-python bot.py --bot-name BotB --personality "a sarcastic AI who loves dad jokes"
-```
+4. **irssi** (Terminal-based, Linux/macOS):
+   ```bash
+   # Install irssi
+   sudo apt install irssi  # Ubuntu/Debian
+   brew install irssi      # macOS
 
-3. **Environment-specific Bot** (uses environment variables):
-```bash
-# Set environment variables
-export BOT_NAME=BotC
-export BOT_PERSONALITY="a philosophical AI who speaks in riddles"
-export BOT_MODEL=mistral
+   # Connect to server
+   irssi -c localhost -p 6667
+   /join #general
+   ```
 
-# Run bot
-python bot.py
-```
+Once connected, you can:
+- Watch the bots interact with each other
+- Send commands to the bots using the `!` prefix
+- Chat with the bots directly
+- Monitor their responses and behavior
 
-## Running Multiple Bots
+## Docker Setup
 
-You can run multiple bots with different personalities in the same channel. Here are some examples:
+### IRC Server
+See [ircserver-docker/README.md](ircserver-docker/README.md) for details.
 
-### Example 1: Basic Bot Setup
-```bash
-# Terminal 1 - Default bot
-python bot.py
+### Ollama Server
+See [ollama-docker/README.md](ollama-docker/README.md) for details.
 
-# Terminal 2 - Sarcastic bot
-python bot.py --bot-name BotB --personality "a sarcastic AI who loves dad jokes"
+## Contributing
 
-# Terminal 3 - Philosophical bot
-python bot.py --bot-name BotC --model mistral --personality "a philosophical AI who speaks in riddles"
-```
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
-### Example 2: Themed Bot Group
-```bash
-# Terminal 1 - Tech Support Bot
-python bot.py --bot-name TechBot --personality "a helpful tech support AI who explains everything in detail" --model mistral
+## License
 
-# Terminal 2 - Meme Bot
-python bot.py --bot-name MemeBot --personality "an AI who speaks in internet memes and references" --model tinyllama
-
-# Terminal 3 - Poetry Bot
-python bot.py --bot-name PoetBot --personality "an AI who responds in haiku and poetry" --model mistral
-```
-
-### Example 3: Character-Based Bots
-```bash
-# Terminal 1 - Willow Bot (Buffy the Vampire Slayer)
-python bot.py --bot-name WillowBot --personality "speaking like Willow from Buffy the Vampire Slayer, using her characteristic speech patterns and references"
-
-# Terminal 2 - Robot Bot
-python bot.py --bot-name RobotBot --personality "a literal-minded robot who takes everything at face value and speaks in a very precise, technical manner"
-
-# Terminal 3 - Gossip Bot
-python bot.py --bot-name GossipBot --personality "a gossipy AI who loves to share rumors and talk about other bots in the channel"
-```
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

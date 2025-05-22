@@ -13,14 +13,14 @@ This directory contains the necessary files to run Ollama in a Docker container.
 ## Prerequisites
 
 - Docker
-- Docker Compose
+- Docker Compose Plugin (included with Docker Desktop or install with `sudo apt install docker-compose-plugin`)
 - (Optional) NVIDIA GPU with drivers and nvidia-docker2 for GPU support
 
 ## Quick Start
 
 1. Build and start the server:
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 2. Pull the default model (tinyllama):
@@ -82,8 +82,8 @@ services:
 
 3. Restart the container:
 ```bash
-docker-compose down
-docker-compose up -d
+docker compose down
+docker compose up -d
 ```
 
 ## Available Models
@@ -112,7 +112,7 @@ This server is configured to work with the [IRC Chatbot](https://github.com/nrdg
 1. Start the Ollama server:
 ```bash
 cd ollama-docker
-docker-compose up -d
+docker compose up -d
 ```
 
 2. Update your bot's configuration to use this server:
@@ -143,7 +143,7 @@ docker-compose up -d
 ## Troubleshooting
 
 1. **Server not starting**
-   - Check logs: `docker-compose logs`
+   - Check logs: `docker compose logs`
    - Verify port 11434 is not in use
    - Check system resources
 
