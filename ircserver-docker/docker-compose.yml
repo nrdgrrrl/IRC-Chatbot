@@ -1,3 +1,5 @@
+version: '3.7'  # optional but recommended
+
 services:
   irc:
     build: .
@@ -6,3 +8,11 @@ services:
       - "0.0.0.0:6667:6667"  # Allow connections from external IPs
     restart: unless-stopped
 
+    # Allow more open connections by increasing ulimit
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+
+    # Optional: Uncomment this for testing if Docker's bridge networking is causing the limit
+    # network_mode: "host"
