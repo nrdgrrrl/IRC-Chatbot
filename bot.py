@@ -196,34 +196,54 @@ def summarize_history(lines):
     return "\n".join(summary)
 
 def generate_reply(prompt, system_override=None, max_retries=3, base_delay=3):
-    print(f"\n[{BOT_NAME}] Sending full prompt to Ollama:\n{'='*60}\n{prompt}\n{'='*60}\n")
-    for attempt in range(max_retries):
-        try:
-            with request_semaphore:
-                payload = {
-                    "model": MODEL,
-                    "prompt": prompt,
-                    "stream": False
-                }
-                if MODEL.startswith("deepseek") and system_override:
-                    payload["system"] = system_override
+    print(f"\n[{BOT_NAME}] Sending prompt to Ollama:\n{'='*60}\n{prompt}\n{'='*60}\n")
+    
+    # First try to generate a response
+    try:
+        with request_semaphore:
+            payload = {
+                "model": MODEL,
+                "prompt": prompt,
+                "stream": False
+            }
+            if MODEL.startswith("deepseek") and system_override:
+                payload["system"] = system_override
 
-                response = httpx.post(OLLAMA_URL, json=payload, timeout=350)
-                response.raise_for_status()
-                reply = response.json().get("response", "").strip()
-                print(f"[{BOT_NAME}] Ollama full reply:\n{'-'*60}\n{reply}\n{'-'*60}")
-                if reply:
-                    reply = clean_reply(reply)
-                    if is_looping(reply) or is_repetitive(reply):
-                        print(f"[{BOT_NAME}] Loop/repeat detected. Retrying...")
-                        continue
-                    return reply
-        except Exception as e:
-            wait = base_delay * (2 ** attempt) + random.uniform(0.0, 1.0)
-            print(f"[{BOT_NAME}] Ollama error (attempt {attempt+1}): {e} — retrying in {wait:.1f}s")
-            time.sleep(wait)
+            response = httpx.post(OLLAMA_URL, json=payload, timeout=350)
+            response.raise_for_status()
+            reply = response.json().get("response", "").strip()
+            
+            if not reply:
+                print(f"[{BOT_NAME}] Empty reply from Ollama")
+                return get_fallback_response()
+            
+            # Clean and validate the reply
+            reply = clean_reply(reply)
+            
+            # If the reply is looping or repetitive, try to fix it without making another API call
+            if is_looping(reply) or is_repetitive(reply):
+                print(f"[{BOT_NAME}] Loop/repeat detected in response. Attempting to fix...")
+                # Try to extract just the first unique sentence
+                sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', reply)
+                if sentences:
+                    # Take the first sentence that isn't in the last replies
+                    for sentence in sentences:
+                        if not any(SequenceMatcher(None, sentence.lower(), prev.lower()).ratio() > 0.9 for prev in last_replies[-3:]):
+                            reply = sentence.strip()
+                            break
+                    else:
+                        # If all sentences are too similar, use a fallback
+                        return get_fallback_response()
+            
+            print(f"[{BOT_NAME}] Ollama reply:\n{'-'*60}\n{reply}\n{'-'*60}")
+            return reply
+            
+    except Exception as e:
+        print(f"[{BOT_NAME}] Ollama error: {e}")
+        return get_fallback_response()
 
-    print(f"[{BOT_NAME}] All attempts failed. Using fallback response.")
+def get_fallback_response():
+    """Get a fallback response when generation fails"""
     return random.choice([
         "Sorry, my thoughts just went out for coffee.",
         "Could you rephrase that in haiku form?",
