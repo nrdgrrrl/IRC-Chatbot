@@ -144,12 +144,26 @@ def clean_reply(reply):
     # Remove bot name prefix if it exists (case insensitive)
     reply = re.sub(rf"^{BOT_NAME}[:,]?\s*", "", reply, flags=re.IGNORECASE)
     
-    # Split into sentences and limit to 1-3 sentences
-    sentences = re.split(r'(?<=[.!?]) +', reply)
-    reply = ' '.join(sentences[:random.choice([1, 2, 3])]).strip()
-    
     # Remove any remaining bot name mentions
     reply = re.sub(rf"{BOT_NAME}[:,]?\s*", "", reply, flags=re.IGNORECASE)
+    
+    # Split into sentences, but preserve emojis and special characters
+    sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', reply)
+    
+    # If the reply is already short enough (under 400 chars), keep it intact
+    if len(reply) <= 400:
+        return reply
+    
+    # Otherwise, take 1-3 sentences while trying to preserve complete thoughts
+    num_sentences = min(len(sentences), random.choice([1, 2, 3]))
+    reply = ' '.join(sentences[:num_sentences]).strip()
+    
+    # If we still have room, try to include more of the response
+    if len(reply) < 350 and len(sentences) > num_sentences:
+        # Try to add one more sentence if it fits
+        next_sentence = sentences[num_sentences]
+        if len(reply + ' ' + next_sentence) <= 400:
+            reply = reply + ' ' + next_sentence
     
     return reply
 
@@ -231,27 +245,41 @@ def on_pubmsg(connection, event):
     if len(recent_messages) > 100:
         recent_messages.pop()
 
+    # Get response probabilities from config
+    probs = config["behavior"]["response_probabilities"]
+    
+    # Determine message type and corresponding probability
     is_victoria = nick.lower() == ALWAYS_RESPOND_TO.lower()
     is_addressed = BOT_NAME.lower() in msg.lower()
     is_question = msg.strip().endswith("?")
     is_bot = nick.startswith("Bot")
     addressed_any_bot = any(b in msg.lower() for b in ["bota", "botb", "botc", "botd", "bote"])
 
+    # Calculate response probability based on message type
+    if is_victoria:
+        response_prob = probs["always_respond_to"]
+    elif is_addressed:
+        response_prob = probs["addressed_directly"]
+    elif is_question:
+        response_prob = probs["question"]
+    elif addressed_any_bot:
+        response_prob = probs["addressed_any_bot"]
+    elif is_bot:
+        response_prob = probs["other_bot_message"]
+    else:
+        response_prob = probs["general_message"]
+
     if len(msg.split()) > 80 or msg.count(":") > 3:
         return
     if msg.startswith(f"{BOT_NAME}:"):
         return
 
-    should_respond = (
-        is_victoria or is_addressed or is_question or
-        addressed_any_bot or (is_bot and random.random() < 0.95)
-    )
-
-    if not should_respond:
-        print(f"[{BOT_NAME}] Not responding to: {msg}")
+    # Use the calculated probability to decide whether to respond
+    if random.random() > response_prob:
+        print(f"[{BOT_NAME}] Decided not to respond (probability: {response_prob:.2f})")
         return
 
-    print(f"[{BOT_NAME}] Decided to respond to: {msg}")
+    print(f"[{BOT_NAME}] Decided to respond (probability: {response_prob:.2f})")
     log_message(nick, msg)
     conversation_history.append(f"{nick}: {msg}")
     if len(conversation_history) > CONVERSATION_HISTORY_LENGTH:
@@ -319,7 +347,7 @@ def on_pubmsg(connection, event):
             safe = safe[:400] + "..."
 
         log_message(BOT_NAME, safe)
-        connection.privmsg(CHANNEL, safe)  # Removed the bot name prefix here
+        connection.privmsg(CHANNEL, safe)
 
     threading.Thread(target=respond).start()
 
