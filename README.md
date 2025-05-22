@@ -7,7 +7,7 @@ A modular IRC chatbot that uses Ollama for AI-powered responses. The bot can be 
 - Modular command system
 - AI-powered responses using Ollama
 - Configurable through JSON
-- Multiple model support
+- Multiple model support (tinyllama, mistral, etc.)
 - Docker support for both IRC server and Ollama
 
 ## Prerequisites
@@ -77,7 +77,10 @@ docker compose up -d
 ```bash
 cd ollama-docker
 docker compose up -d
+# Pull the default model (tinyllama)
 docker exec -it ollama-server ollama pull tinyllama
+# Or pull the smarter model (mistral)
+docker exec -it ollama-server ollama pull mistral
 ```
 
 ## Configuration
@@ -98,7 +101,7 @@ cp config.example.json config.json
     "bot": {
         "name": "your_bot_name",
         "personality": "a friendly and helpful AI assistant",
-        "model": "tinyllama",
+        "model": "mistral",
         "always_respond_to": "Victoria"
     },
     "ollama": {
@@ -131,8 +134,8 @@ cp config.example.json config.json
 # Basic usage
 python bot.py
 
-# Or with custom personality
-python bot.py --bot-name BotB --personality "a sarcastic AI who loves dad jokes"
+# Or with custom personality and model
+python bot.py --bot-name BotB --personality "a sarcastic AI who loves dad jokes" --model mistral
 ```
 
 2. The bot will connect to the IRC server and join the configured channels.
@@ -143,6 +146,27 @@ python bot.py --bot-name BotB --personality "a sarcastic AI who loves dad jokes"
    - `!model <name>` - Switch to a different model
    - `!temperature <value>` - Adjust response temperature
    - `!max_tokens <value>` - Adjust maximum response length
+
+### Model Selection
+
+The bot supports multiple models with different characteristics:
+
+1. **tinyllama** (Default, CPU-friendly):
+   - Fastest response time
+   - Lowest memory usage (~2GB RAM)
+   - Good for basic conversations
+   - Best for systems with limited resources
+
+2. **mistral** (Recommended, Balanced):
+   - Better response quality
+   - Moderate memory usage (~4GB RAM)
+   - Good balance of speed and quality
+   - Works well on modern CPUs
+
+To switch models:
+1. Edit `config.json` and change the `model` field
+2. Or use the `--model` command-line argument
+3. Or use the `!model` command in chat
 
 ### Watching the Bots Interact
 
