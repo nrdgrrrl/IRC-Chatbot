@@ -13,11 +13,12 @@ A Python-based IRC chatbot that uses Ollama for generating responses. The bot ca
 - Environment variable configuration
 - Anti-repetition and anti-looping mechanisms
 - Command-line configuration for running multiple bots
+- Includes Docker setup for local IRC server
 
 ## Requirements
 
 - Python 3.6+
-- IRC server
+- IRC server (included Docker setup available)
 - Ollama server running locally or remotely
 
 ## Installation
@@ -33,7 +34,14 @@ cd IRC-Chatbot
 pip install -r requirements.txt
 ```
 
-3. Configure the bot by editing `config.json` or setting environment variables.
+3. (Optional) Set up a local IRC server using Docker:
+```bash
+cd ircserver-docker
+docker-compose up -d
+```
+See [IRC Server Setup](ircserver-docker/README.md) for more details.
+
+4. Configure the bot by editing `config.json` or setting environment variables.
 
 ## Configuration
 
