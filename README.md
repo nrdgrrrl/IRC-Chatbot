@@ -93,17 +93,33 @@ cp config.example.json config.json
     "irc": {
         "server": "localhost",
         "port": 6667,
-        "channels": ["#general"]
+        "channel": ["#general"]
     },
     "bot": {
         "name": "your_bot_name",
-        "personality": "a friendly and helpful AI assistant"
+        "personality": "a friendly and helpful AI assistant",
+        "model": "tinyllama",
+        "always_respond_to": "Victoria"
     },
     "ollama": {
         "url": "http://localhost:11434/api/generate",
-        "model": "tinyllama",
         "temperature": 0.7,
         "max_tokens": 100
+    },
+    "logging": {
+        "enabled": true,
+        "log_dir": "logs"
+    },
+    "files": {
+        "prompt_file": "prompts.json"
+    },
+    "behavior": {
+        "off_topic_chance": 0.12,
+        "tone_chance": 0.25,
+        "post_delay_seconds": 20,
+        "post_delay_jitter": 10,
+        "max_concurrent_requests": 1,
+        "conversation_history_length": 6
     }
 }
 ```

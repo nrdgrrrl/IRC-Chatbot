@@ -73,7 +73,7 @@ config = load_config()
 # --- Configuration from config file ---
 SERVER = config["irc"]["server"]
 PORT = config["irc"]["port"]
-CHANNEL = config["irc"]["channel"]
+CHANNEL = config["irc"]["channel"][0]  # Take the first channel from the list
 
 BOT_NAME = config["bot"]["name"]
 PERSONALITY = config["bot"]["personality"]
