@@ -12,9 +12,149 @@ import argparse
 from pathlib import Path
 from difflib import SequenceMatcher
 from dotenv import load_dotenv
+import hashlib
 
 # Load environment variables
 load_dotenv()
+
+# Global state for config and prompt reloading
+config_hash = None
+prompt_hash = None
+config = None
+prompts = None
+last_config_check = 0
+last_prompt_check = 0
+CONFIG_CHECK_INTERVAL = 5  # Check for changes every 5 seconds
+
+# Global variables for bot configuration
+SERVER = None
+PORT = None
+CHANNEL = None
+BOT_NAME = None
+PERSONALITY = None
+MODEL = None
+ALWAYS_RESPOND_TO = None
+OLLAMA_URL = None
+ENABLE_LOGGING = None
+LOG_DIR = None
+PROMPT_FILE = None
+OFF_TOPIC_CHANCE = None
+TONE_CHANCE = None
+POST_DELAY_SECONDS = None
+POST_DELAY_JITTER = None
+MAX_CONCURRENT_REQUESTS = None
+CONVERSATION_HISTORY_LENGTH = None
+
+def get_file_hash(filepath):
+    """Get MD5 hash of a file's contents"""
+    try:
+        with open(filepath, 'rb') as f:
+            return hashlib.md5(f.read()).hexdigest()
+    except Exception as e:
+        print(f"Error reading file {filepath}: {e}")
+        return None
+
+def reload_config():
+    """Reload configuration from config.json"""
+    global config, config_hash
+    global SERVER, PORT, CHANNEL, BOT_NAME, PERSONALITY, MODEL, ALWAYS_RESPOND_TO
+    global OLLAMA_URL, ENABLE_LOGGING, LOG_DIR, PROMPT_FILE
+    global OFF_TOPIC_CHANCE, TONE_CHANCE, POST_DELAY_SECONDS, POST_DELAY_JITTER
+    global MAX_CONCURRENT_REQUESTS, CONVERSATION_HISTORY_LENGTH
+    
+    try:
+        with open("config.json", "r", encoding="utf-8") as f:
+            new_config = json.load(f)
+            
+        # Override with environment variables if they exist
+        new_config["irc"]["server"] = os.getenv("IRC_SERVER", new_config["irc"]["server"])
+        new_config["irc"]["port"] = int(os.getenv("IRC_PORT", new_config["irc"]["port"]))
+        new_config["irc"]["channel"] = os.getenv("IRC_CHANNEL", new_config["irc"]["channel"])
+        
+        new_config["bot"]["name"] = os.getenv("BOT_NAME", new_config["bot"]["name"])
+        new_config["bot"]["personality"] = os.getenv("BOT_PERSONALITY", new_config["bot"]["personality"])
+        new_config["bot"]["model"] = os.getenv("BOT_MODEL", new_config["bot"]["model"])
+        new_config["bot"]["always_respond_to"] = os.getenv("BOT_ALWAYS_RESPOND_TO", new_config["bot"]["always_respond_to"])
+        
+        new_config["ollama"]["url"] = os.getenv("OLLAMA_URL", new_config["ollama"]["url"])
+        
+        # Override with command line arguments if they exist
+        args = parse_args()
+        if args.bot_name:
+            new_config["bot"]["name"] = args.bot_name
+        if args.personality:
+            new_config["bot"]["personality"] = args.personality
+        if args.model:
+            new_config["bot"]["model"] = args.model
+        if args.irc_server:
+            new_config["irc"]["server"] = args.irc_server
+        if args.irc_port:
+            new_config["irc"]["port"] = args.irc_port
+        if args.irc_channel:
+            new_config["irc"]["channel"] = args.irc_channel
+        if args.ollama_url:
+            new_config["ollama"]["url"] = args.ollama_url
+
+        config = new_config
+        config_hash = get_file_hash("config.json")
+        print(f"[{new_config['bot']['name']}] Configuration reloaded successfully")
+        
+        # Update global variables
+        SERVER = config["irc"]["server"]
+        PORT = config["irc"]["port"]
+        CHANNEL = config["irc"]["channel"][0]
+        BOT_NAME = config["bot"]["name"]
+        PERSONALITY = config["bot"]["personality"]
+        MODEL = config["bot"]["model"]
+        ALWAYS_RESPOND_TO = config["bot"]["always_respond_to"]
+        OLLAMA_URL = config["ollama"]["url"]
+        ENABLE_LOGGING = config["logging"]["enabled"]
+        LOG_DIR = config["logging"]["log_dir"]
+        PROMPT_FILE = config["files"]["prompt_file"]
+        OFF_TOPIC_CHANCE = config["behavior"]["off_topic_chance"]
+        TONE_CHANCE = config["behavior"]["tone_chance"]
+        POST_DELAY_SECONDS = config["behavior"]["post_delay_seconds"]
+        POST_DELAY_JITTER = config["behavior"]["post_delay_jitter"]
+        MAX_CONCURRENT_REQUESTS = config["behavior"]["max_concurrent_requests"]
+        CONVERSATION_HISTORY_LENGTH = config["behavior"]["conversation_history_length"]
+        
+    except Exception as e:
+        print(f"Error reloading config: {e}")
+
+def reload_prompts():
+    """Reload prompts from prompts.json"""
+    global prompts, prompt_hash
+    try:
+        with open(PROMPT_FILE, "r", encoding="utf-8") as f:
+            prompts = json.load(f)
+        prompt_hash = get_file_hash(PROMPT_FILE)
+        print(f"[{BOT_NAME}] Prompts reloaded successfully")
+    except Exception as e:
+        print(f"[{BOT_NAME}] Error reloading prompts: {e}")
+
+def check_for_updates():
+    """Check if config or prompts have changed and reload if necessary"""
+    global last_config_check, last_prompt_check
+    
+    current_time = time.time()
+    
+    # Check config.json
+    if current_time - last_config_check >= CONFIG_CHECK_INTERVAL:
+        new_hash = get_file_hash("config.json")
+        if new_hash and new_hash != config_hash:
+            reload_config()
+        last_config_check = current_time
+    
+    # Check prompts.json
+    if current_time - last_prompt_check >= CONFIG_CHECK_INTERVAL:
+        new_hash = get_file_hash(PROMPT_FILE)
+        if new_hash and new_hash != prompt_hash:
+            reload_prompts()
+        last_prompt_check = current_time
+
+# Initial load of config and prompts
+reload_config()
+reload_prompts()
 
 def parse_args():
     parser = argparse.ArgumentParser(description='IRC Chatbot with Ollama integration')
@@ -107,8 +247,8 @@ conversation_revival_running = False
 def log_message(nick, msg):
     if not ENABLE_LOGGING:
         return
-    timestamp = datetime.datetime.now().strftime("[%H:%M:%S]")
-    log_line = f"{timestamp} {nick}: {msg}\n"
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_line = f"[{timestamp}] {nick}: {msg}\n"
     Path(LOG_DIR).mkdir(exist_ok=True)
     log_path = Path(LOG_DIR) / f"{BOT_NAME}.log"
     with open(log_path, "a", encoding="utf-8") as f:
@@ -286,6 +426,9 @@ def conversation_revival_loop(connection):
     
     while conversation_revival_running:
         try:
+            # Check for config/prompt updates
+            check_for_updates()
+            
             if should_revive_conversation():
                 print(f"[{BOT_NAME}] Conversation has been quiet, attempting to revive...")
                 
@@ -382,6 +525,9 @@ def on_disconnect(connection, event):
         print(f"[{BOT_NAME}] Reconnection failed: {e}")
 
 def on_pubmsg(connection, event):
+    # Check for config/prompt updates before processing message
+    check_for_updates()
+    
     global last_activity_time, last_message_time
     last_activity_time = datetime.datetime.now(datetime.UTC)
     last_message_time = time.time()
