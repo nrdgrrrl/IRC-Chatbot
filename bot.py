@@ -98,7 +98,7 @@ request_semaphore = threading.Semaphore(MAX_CONCURRENT_REQUESTS)
 # --- Bot state ---
 conversation_history = []
 recent_messages = set()
-last_activity_time = datetime.datetime.utcnow()
+last_activity_time = datetime.datetime.now(datetime.UTC)
 last_replies = []
 last_message_time = None
 
@@ -219,16 +219,39 @@ def generate_reply(prompt, system_override=None, max_retries=3, base_delay=3):
 
 def on_connect(connection, event):
     print(f"[{BOT_NAME}] Connected.")
+    # Send USER command explicitly
+    connection.send_raw(f"USER {BOT_NAME} 0 * :{PERSONALITY}")
+    # Join channel after a short delay to ensure registration is complete
+    time.sleep(1)
     connection.join(CHANNEL)
     log_message("System", f"{BOT_NAME} has joined {CHANNEL}")
 
 def on_disconnect(connection, event):
-    print(f"[{BOT_NAME}] Disconnected.")
+    print(f"[{BOT_NAME}] Disconnected. Event: {event}")
     log_message("System", f"{BOT_NAME} has disconnected")
+    
+    # Check if we should stop trying to reconnect
+    if "Too many connections" in str(event) or "Connection limit exceeded" in str(event):
+        print(f"[{BOT_NAME}] Server connection limit reached. Stopping reconnection attempts.")
+        return
+            
+    # Try to reconnect after a delay
+    time.sleep(5)
+    try:
+        print(f"[{BOT_NAME}] Attempting to reconnect to {SERVER}:{PORT}...")
+        connection.connect(
+            SERVER, PORT, BOT_NAME,
+            connect_factory=irc.connection.Factory(),
+            password=None,  # Add password here if needed
+            username=BOT_NAME,
+            ircname=PERSONALITY
+        )
+    except Exception as e:
+        print(f"[{BOT_NAME}] Reconnection failed: {e}")
 
 def on_pubmsg(connection, event):
     global last_activity_time, last_message_time
-    last_activity_time = datetime.datetime.utcnow()
+    last_activity_time = datetime.datetime.now(datetime.UTC)
     last_message_time = time.time()
 
     msg = event.arguments[0]
@@ -354,19 +377,69 @@ def on_pubmsg(connection, event):
 def main():
     reactor = irc.client.Reactor()
     try:
+        print(f"[{BOT_NAME}] Attempting to connect to {SERVER}:{PORT}...")
         conn = reactor.server().connect(
             SERVER, PORT, BOT_NAME,
-            connect_factory=irc.connection.Factory()
+            connect_factory=irc.connection.Factory(),
+            password=None,  # Add password here if needed
+            username=BOT_NAME,
+            ircname=PERSONALITY
         )
+        print(f"[{BOT_NAME}] Connection object created successfully")
     except irc.client.ServerConnectionError as e:
         print(f"[{BOT_NAME}] Failed to connect: {e}")
         return
+    except Exception as e:
+        print(f"[{BOT_NAME}] Unexpected error during connection: {e}")
+        return
 
-    conn.add_global_handler("welcome", on_connect)
+    def on_welcome(connection, event):
+        print(f"[{BOT_NAME}] Received welcome event: {event}")
+        on_connect(connection, event)
+
+    def on_disconnect(connection, event):
+        print(f"[{BOT_NAME}] Disconnected. Event: {event}")
+        log_message("System", f"{BOT_NAME} has disconnected")
+        
+        # Check if we should stop trying to reconnect
+        if "Too many connections" in str(event) or "Connection limit exceeded" in str(event):
+            print(f"[{BOT_NAME}] Server connection limit reached. Stopping reconnection attempts.")
+            return
+            
+        # Try to reconnect after a delay
+        time.sleep(5)
+        try:
+            print(f"[{BOT_NAME}] Attempting to reconnect to {SERVER}:{PORT}...")
+            connection.connect(
+                SERVER, PORT, BOT_NAME,
+                connect_factory=irc.connection.Factory(),
+                password=None,  # Add password here if needed
+                username=BOT_NAME,
+                ircname=PERSONALITY
+            )
+        except Exception as e:
+            print(f"[{BOT_NAME}] Reconnection failed: {e}")
+
+    def on_error(connection, event):
+        print(f"[{BOT_NAME}] Error event received: {event}")
+        if "Too many connections" in str(event) or "Connection limit exceeded" in str(event):
+            print(f"[{BOT_NAME}] Server connection limit reached. Please disconnect another bot first.")
+            connection.disconnect()
+
+    conn.add_global_handler("welcome", on_welcome)
     conn.add_global_handler("disconnect", on_disconnect)
+    conn.add_global_handler("error", on_error)
     conn.add_global_handler("pubmsg", on_pubmsg)
 
-    reactor.process_forever()
+    try:
+        print(f"[{BOT_NAME}] Starting reactor...")
+        reactor.process_forever()
+    except KeyboardInterrupt:
+        print(f"\n[{BOT_NAME}] Shutting down...")
+        conn.disconnect()
+    except Exception as e:
+        print(f"[{BOT_NAME}] Error in main loop: {e}")
+        conn.disconnect()
 
 if __name__ == "__main__":
     main()
